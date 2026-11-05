@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회계사 채용 공고</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+  :root {
+    --paper: #f2f5f0;
+    --card: #fbfcfa;
+    --ink: #16231e;
+    --ink-soft: #55645d;
+    --rule: #c9d5cc;
+    --ledger: #1f6b52;
+    --ledger-soft: #e1eee5;
+    --urgent: #b3261e;
+    --urgent-soft: #f8e4e1;
+    --gold: #b98900;
+    --jobkorea: #2358c9;
+    --saramin: #b85c00;
+    --kicpa: #1f6b52;
+    --font: "Pretendard", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #101a16;
+      --card: #16231e;
+      --ink: #e8efea;
+      --ink-soft: #9fb0a7;
+      --rule: #2c3d35;
+      --ledger: #5cc19c;
+      --ledger-soft: #1d3329;
+      --urgent: #ff8a80;
+      --urgent-soft: #3a1f1c;
+      --gold: #f0c14b;
+      --jobkorea: #7ea6ff;
+      --saramin: #ffb066;
+      --kicpa: #5cc19c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--font); font-size: 15px; line-height: 1.5;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 28px 16px 64px; }
+  h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 20px; }
+
+  /* 탭 */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 18px; }
+  .tab {
+    border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none;
+    padding: 8px 12px; font-weight: 700; color: var(--ink-soft);
+  }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ledger); }
+  .tab small { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* 검색 */
+  .search { display: flex; gap: 8px; margin-bottom: 8px; }
+  input[type=search], input[type=text], textarea {
+    padding: 11px 14px; font: inherit; min-width: 0;
+    border: 1.5px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink);
+  }
+  .search input { flex: 1; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; font-size: 13px; color: var(--ink-soft); align-items: center; }
+  .presets button { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; }
+  button {
+    font: inherit; cursor: pointer; color: var(--ink);
+    border: 1.5px solid var(--rule); background: var(--card); border-radius: 8px; padding: 9px 14px;
+  }
+  button:disabled { opacity: .5; cursor: progress; }
+  button.primary { background: var(--ledger); border-color: var(--ledger); color: #fff; font-weight: 700; }
+  button.ghost { border-color: transparent; background: none; padding: 4px 8px; color: var(--ink-soft); font-size: 13px; }
+  button.ghost:hover { color: var(--ink); text-decoration: underline; }
+  @media (prefers-color-scheme: dark) { button.primary { color: #0b1812; } }
+  :focus-visible { outline: 3px solid var(--ledger); outline-offset: 2px; }
+  a.btn { display: inline-flex; align-items: center; text-decoration: none; color: var(--ink); border: 1.5px solid var(--rule); background: var(--card); border-radius: 8px; padding: 6px 12px; font-size: 13.5px; }
+
+  /* 요약: 장부의 합계란처럼 */
+  .totals {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule);
+    margin-bottom: 16px;
+  }
+  .total { padding: 12px 4px 10px 14px; border-left: 1px solid var(--rule); }
+  .total:first-child { border-left: 0; padding-left: 0; }
+  .total b { display: block; font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .total span { font-size: 12.5px; color: var(--ink-soft); }
+  .total.warn b { color: var(--urgent); }
+  .total.good b { color: var(--ledger); }
+
+  /* 필터 */
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .filters input[type=search] { padding: 7px 12px; flex: 1 1 200px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+    font-size: 13.5px; background: var(--card);
+  }
+  .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--ink-soft); }
+  .chip i.ok { background: var(--ledger); }
+  .chip i.err { background: var(--urgent); }
+  .chip small { opacity: .75; font-variant-numeric: tabular-nums; }
+  .spacer { flex: 1; }
+  select { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1.5px solid var(--rule); background: var(--card); color: var(--ink); max-width: 100%; }
+  .count-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 14px 0 6px; font-size: 13px; color: var(--ink-soft); }
+
+  .notice { background: var(--urgent-soft); color: var(--urgent); border-radius: 8px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 12px; }
+  .notice p { margin: 2px 0; word-break: break-all; }
+
+  /* 설정 */
+  details.settings { border: 1px solid var(--rule); border-radius: 8px; background: var(--card); margin-bottom: 14px; }
+  details.settings summary { cursor: pointer; padding: 10px 14px; font-size: 13.5px; font-weight: 600; }
+  .settings-body { padding: 0 14px 14px; display: grid; gap: 14px; }
+  .settings-body label { font-size: 13px; color: var(--ink-soft); display: grid; gap: 4px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill { font-size: 12.5px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--paper); border: 1px solid var(--rule); display: inline-flex; align-items: center; gap: 2px; }
+  .pill button { border: 0; background: none; padding: 0 6px; font-size: 14px; line-height: 1; color: var(--ink-soft); }
+
+  /* 공고 목록 */
+  ul.list { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--ink); }
+  .row {
+    display: grid; grid-template-columns: 76px 1fr auto auto auto; gap: 4px 12px; align-items: start;
+    padding: 14px 4px; border-bottom: 1px solid var(--rule); background: var(--paper);
+  }
+  .row.new { background: var(--ledger-soft); }
+  .row.closed { opacity: .5; }
+  .dday { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; text-align: right; line-height: 1.25; }
+  .dday.soon { color: var(--urgent); }
+  .dday.none { font-size: 14px; font-weight: 600; color: var(--ink-soft); padding-top: 3px; }
+  .main { min-width: 0; }
+  .main a { color: var(--ink); font-weight: 650; text-decoration: none; font-size: 16px; word-break: keep-all; overflow-wrap: anywhere; }
+  .main a:hover { text-decoration: underline; }
+  .meta { margin: 2px 0 0; color: var(--ink-soft); font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 2px 14px; }
+  .meta .co { color: var(--ink); font-weight: 600; }
+  .memo-line { margin: 4px 0 0; font-size: 13px; color: var(--ink); background: var(--card); border-left: 3px solid var(--gold); padding: 3px 8px; white-space: pre-wrap; }
+  .tag { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 4px; margin-left: 6px; vertical-align: 2px; white-space: nowrap; }
+  .tag.pt { background: var(--ledger); color: #fff; }
+  .tag.nw { background: var(--ink); color: var(--paper); }
+  .tag.st { background: var(--gold); color: #fff; }
+  .tag.gone { background: var(--rule); color: var(--ink); }
+  @media (prefers-color-scheme: dark) { .tag.pt, .tag.st { color: #0b1812; } }
+  .src { font-size: 12.5px; font-weight: 700; padding-top: 4px; white-space: nowrap; }
+  .src.jobkorea { color: var(--jobkorea); }
+  .src.saramin { color: var(--saramin); }
+  .src.kicpa { color: var(--kicpa); }
+  .star { border: 0; background: none; font-size: 20px; line-height: 1; padding: 2px 4px; color: var(--rule); }
+  .star[aria-pressed="true"] { color: var(--gold); }
+  .more { border: 0; background: none; font-size: 18px; line-height: 1; padding: 2px 6px; color: var(--ink-soft); }
+  .more[aria-expanded="true"] { color: var(--ink); }
+
+  .editor { grid-column: 2 / -1; display: grid; gap: 8px; padding: 10px 12px; margin-top: 6px; background: var(--card); border: 1px solid var(--rule); border-radius: 8px; }
+  .editor .line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
+  .editor textarea { width: 100%; min-height: 64px; resize: vertical; padding: 8px 10px; font-size: 14px; }
+  .saved { font-size: 12px; color: var(--ledger); }
+
+  /* 지원 현황 */
+  .board { display: grid; gap: 22px; }
+  .group h3 { font-size: 15px; margin: 0 0 6px; display: flex; gap: 8px; align-items: baseline; }
+  .group h3 small { color: var(--ink-soft); font-weight: 600; }
+  .funnel { display: flex; gap: 0; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; margin-bottom: 18px; background: var(--card); }
+  .funnel div { flex: 1; padding: 8px 10px; border-left: 1px solid var(--rule); min-width: 0; }
+  .funnel div:first-child { border-left: 0; }
+  .funnel b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .funnel span { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+
+  .empty { padding: 48px 8px; text-align: center; color: var(--ink-soft); }
+  .loading { padding: 48px 8px; text-align: center; color: var(--ink-soft); }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); }
+  .toast.show { opacity: 1; }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 600px) {
+    h1 { font-size: 22px; }
+    .totals { grid-template-columns: repeat(2, 1fr); }
+    .total:nth-child(3) { border-left: 0; padding-left: 0; }
+    .total:nth-child(n+3) { border-top: 1px solid var(--rule); }
+    .row { grid-template-columns: 56px 1fr auto auto; }
+    .row .src { grid-column: 2; grid-row: 2; padding-top: 0; }
+    .editor { grid-column: 1 / -1; }
+    .dday { font-size: 18px; }
+    .total b { font-size: 24px; }
+    .funnel { flex-wrap: wrap; }
+    .funnel div { flex: 1 1 25%; border-top: 1px solid var(--rule); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>회계사 채용 공고</h1>
+  <p class="sub" id="updated">잡코리아, 사람인, 한공회 구인게시판을 한 번에 모아 봐요.</p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tabJobs" aria-selected="true">공고 목록</button>
+    <button class="tab" role="tab" id="tabTrack" aria-selected="false">내 지원 현황 <small id="trackCount"></small></button>
+  </div>
+
+  <!-- ───── 공고 목록 ───── -->
+  <section id="viewJobs">
+    <form class="search" id="searchForm">
+      <input id="keyword" type="search" value="공인회계사" aria-label="검색 키워드" placeholder="쉼표로 여러 개: 공인회계사, 수습CPA, 회계법인">
+      <button class="primary" type="submit" id="searchBtn">검색</button>
+      <button type="button" id="refresh" title="캐시를 무시하고 다시 불러와요">새로고침</button>
+    </form>
+    <div class="presets" id="presets"></div>
+
+    <div class="totals" id="totals"></div>
+    <div id="notice"></div>
+
+    <details class="settings" id="settingsBox">
+      <summary>숨긴 회사 · 제외 키워드 <span class="sub" id="settingsSummary" style="margin:0"></span></summary>
+      <div class="settings-body">
+        <label>제외 키워드 (제목/회사명에 들어 있으면 숨김, 쉼표로 구분)
+          <input type="text" id="excludeInput" placeholder="예: 마케터, 퍼포먼스">
+        </label>
+        <div>
+          <div class="sub" style="margin:0 0 6px">숨긴 회사 (공고의 ⋯ 메뉴에서 추가)</div>
+          <div class="pills" id="hiddenList"></div>
+        </div>
+      </div>
+    </details>
+
+    <div class="filters" id="chips"></div>
+    <div class="filters">
+      <input type="search" id="q" placeholder="결과 내 검색 (제목·회사·지역)" aria-label="결과 내 검색">
+      <select id="fRegion" aria-label="지역"><option value="">지역 전체</option></select>
+      <select id="fCareer" aria-label="경력">
+        <option value="">경력 전체</option>
+        <option value="new">신입 가능</option>
+        <option value="exp">경력직</option>
+      </select>
+    </div>
+    <div class="filters">
+      <button class="chip" id="fPart" aria-pressed="false">파트타임만</button>
+      <button class="chip" id="fSoon" aria-pressed="false">마감 7일 이내</button>
+      <button class="chip" id="fNew" aria-pressed="false">새 공고만</button>
+      <button class="chip" id="fStar" aria-pressed="false">★ 지원 현황에 있는 것만</button>
+      <button class="chip" id="fClosed" aria-pressed="true">마감·구직완료 숨기기</button>
+      <span class="spacer"></span>
+      <label class="sub" style="margin:0">정렬
+        <select id="sort">
+          <option value="deadline">마감 임박순</option>
+          <option value="recent">최근 등록순</option>
+          <option value="company">회사명순</option>
+          <option value="source">출처별</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="count-line">
+      <span id="countLine"></span>
+      <span><button class="ghost" id="exportCsv">보이는 목록 CSV로 저장</button></span>
+    </div>
+    <div id="out"><div class="loading">공고를 불러오는 중이에요… (한공회는 10초 이상 걸릴 수 있어요)</div></div>
+  </section>
+
+  <!-- ───── 내 지원 현황 ───── -->
+  <section id="viewTrack" hidden>
+    <div class="funnel" id="funnel"></div>
+    <div class="filters">
+      <span class="sub" style="margin:0">★를 누르거나 ⋯에서 상태를 고르면 여기에 모여요. 공고가 사이트에서 내려가도 남아 있어요.</span>
+      <span class="spacer"></span>
+      <a class="btn" href="/api/calendar.ics" title="구글/아웃룩 캘린더에서 가져오기 하면 마감일이 일정으로 들어가요">마감일 캘린더(.ics)</a>
+      <a class="btn" href="/api/marks.csv">엑셀(CSV)로 저장</a>
+    </div>
+    <div id="board" class="board"></div>
+  </section>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const LABEL = { jobkorea: "잡코리아", saramin: "사람인", kicpa: "한공회" };
+const PRESETS = ["공인회계사", "수습CPA", "회계법인", "공인회계사, 수습CPA, 회계법인"];
+const ACTIVE = ["지원예정", "지원완료", "서류합격", "면접"];  // '진행 중'으로 셀 상태
+const REGIONS = ["서울", "경기", "인천", "부산", "대구", "대전", "광주", "울산", "세종", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"];
+
+const saved = store.get("filters", {});
+const state = {
+  view: "jobs",
+  jobs: [], sources: {}, fetchedAt: null,
+  source: "all", part: false, soon: false, onlyNew: false, starOnly: false,
+  hideClosed: saved.hideClosed ?? true, sort: saved.sort || "deadline",
+  q: "", region: saved.region || "", career: saved.career || "",
+  statuses: ["관심", "지원예정", "지원완료", "서류합격", "면접", "최종합격", "불합격"],
+  marks: {},                                  // id → {status, memo, job}
+  settings: { hidden_companies: [], exclude_words: [] },
+  open: new Set(),                            // 펼친 편집기
+  seen: new Set(store.get("seen", [])),       // 지난 방문 때 본 공고
+  firstVisit: store.get("seen", null) === null,
+};
+$("#keyword").value = store.get("keyword", "공인회계사");
+
+/* ───── 계산 ───── */
+function dday(job) {
+  if (!job.deadline_date) return null;
+  const [y, m, d] = job.deadline_date.split("-").map(Number);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(y, m - 1, d) - today) / 86400000);
+}
+const isNew = (j) => !state.firstVisit && !state.seen.has(j.id);
+const isClosed = (j) => j.closed || (dday(j) ?? 0) < 0;
+const regionOf = (j) => REGIONS.find((r) => (j.location || "").startsWith(r)) || "";
+const normCo = (s) => (s || "").replace(/\s|\(주\)|㈜|주식회사/g, "").toLowerCase();
+function careerOk(j) {
+  const c = j.career || "";
+  if (state.career === "new") return /신입|무관/.test(c) || !c;
+  if (state.career === "exp") return /경력/.test(c) && !/무관/.test(c);
+  return true;
+}
+function blocked(j) {
+  const co = normCo(j.company);
+  if (co && state.settings.hidden_companies.some((h) => normCo(h) === co)) return "company";
+  const text = (j.title + " " + j.company).toLowerCase();
+  if (state.settings.exclude_words.some((w) => w && text.includes(w.toLowerCase()))) return "word";
+  return null;
+}
+
+/* ───── 서버 통신 ───── */
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+async function load(refresh = false) {
+  $("#out").innerHTML = '<div class="loading">공고를 불러오는 중이에요… (한공회는 10초 이상 걸릴 수 있어요)</div>';
+  $("#searchBtn").disabled = $("#refresh").disabled = true;
+  const kw = $("#keyword").value.trim() || "공인회계사";
+  store.set("keyword", kw);
+  try {
+    const data = await api(`/api/jobs?keyword=${encodeURIComponent(kw)}&refresh=${refresh}`);
+    state.jobs = data.jobs; state.sources = data.sources; state.fetchedAt = data.fetched_at;
+  } catch (e) {
+    $("#out").innerHTML = '<div class="empty">서버에 연결하지 못했어요. 터미널에서 uvicorn이 실행 중인지 확인해 주세요.</div>';
+    return;
+  } finally {
+    $("#searchBtn").disabled = $("#refresh").disabled = false;
+  }
+  await migrateOldStars();
+  render();
+  // 다음 방문 때 '신규' 표시를 위해 지금 본 공고를 기록
+  const all = new Set([...state.seen, ...state.jobs.map((j) => j.id)]);
+  store.set("seen", [...all].slice(-5000));
+}
+
+async function loadMarks() {
+  try {
+    const d = await api("/api/marks");
+    state.statuses = d.statuses; state.marks = d.marks;
+  } catch {}
+}
+async function loadSettings() {
+  try { state.settings = await api("/api/settings"); } catch {}
+  $("#excludeInput").value = state.settings.exclude_words.join(", ");
+}
+
+// 예전 버전에서 브라우저에만 저장하던 ★를 서버의 '관심'으로 한 번 옮긴다
+async function migrateOldStars() {
+  const old = store.get("stars", null);
+  if (!old || !old.length) return;
+  const ids = new Set(state.jobs.map((j) => j.id));
+  const left = [];
+  for (const id of old) {
+    if (state.marks[id]) continue;
+    if (ids.has(id)) await setMark(id, { status: "관심" }, true); else left.push(id);
+  }
+  store.set("stars", left.length ? left : null);
+}
+
+async function setMark(id, patch, quiet = false) {
+  const cur = state.marks[id] || { status: "", memo: "" };
+  const next = { status: cur.status || "", memo: cur.memo || "", ...patch };
+  try {
+    await api(`/api/marks/${id}`, { method: "PUT", body: JSON.stringify(next) });
+  } catch (e) { toast("저장하지 못했어요: " + e.message); return false; }
+  if (!next.status && !next.memo) delete state.marks[id];
+  else state.marks[id] = { ...cur, ...next, job: cur.job || state.jobs.find((j) => j.id === id) || null, updated_at: new Date().toISOString() };
+  if (!quiet) toast(next.status ? `‘${next.status}’(으)로 저장했어요` : "지원 현황에서 뺐어요");
+  return true;
+}
+async function saveSettings(patch) {
+  try { state.settings = await api("/api/settings", { method: "PUT", body: JSON.stringify(patch) }); }
+  catch (e) { toast("설정을 저장하지 못했어요"); }
+  render();
+}
+
+/* ───── 필터/정렬 ───── */
+function visibleJobs() {
+  const q = state.q.toLowerCase();
+  let list = state.jobs.filter((j) => {
+    const d = dday(j);
+    if (blocked(j)) return false;
+    if (state.source !== "all" && j.source !== state.source) return false;
+    if (state.part && !j.part_time) return false;
+    if (state.soon && !(d !== null && d >= 0 && d <= 7)) return false;
+    if (state.onlyNew && !isNew(j)) return false;
+    if (state.starOnly && !state.marks[j.id]) return false;
+    if (state.hideClosed && isClosed(j)) return false;
+    if (state.region && regionOf(j) !== state.region) return false;
+    if (!careerOk(j)) return false;
+    if (q && !`${j.title} ${j.company} ${j.location}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const key = {
+    deadline: (j) => { const d = dday(j); return d === null ? 9999 : d < 0 ? 5000 - d : d; },
+    recent: (j) => -Date.parse(j.posted_date || j.first_seen || 0),
+    company: (j) => j.company,
+    source: (j) => j.source,
+  }[state.sort];
+  return list.sort((a, b) => { const x = key(a), y = key(b); return x < y ? -1 : x > y ? 1 : 0; });
+}
+
+/* ───── 화면 ───── */
+function render() {
+  store.set("filters", { hideClosed: state.hideClosed, sort: state.sort, region: state.region, career: state.career });
+  const marks = Object.values(state.marks);
+  $("#trackCount").textContent = marks.length ? `(${marks.length})` : "";
+  $("#tabJobs").setAttribute("aria-selected", state.view === "jobs");
+  $("#tabTrack").setAttribute("aria-selected", state.view === "track");
+  $("#viewJobs").hidden = state.view !== "jobs";
+  $("#viewTrack").hidden = state.view !== "track";
+  if (state.view === "track") return renderBoard();
+
+  const jobs = state.jobs.filter((j) => !blocked(j));
+  const open = jobs.filter((j) => !isClosed(j));
+  const soonCount = open.filter((j) => { const d = dday(j); return d !== null && d <= 7; }).length;
+  const newCount = jobs.filter(isNew).length;
+  const activeCount = marks.filter((m) => ACTIVE.includes(m.status)).length;
+  $("#totals").innerHTML = `
+    <div class="total"><b>${open.length}</b><span>진행 중 공고</span></div>
+    <div class="total warn"><b>${soonCount}</b><span>마감 7일 이내</span></div>
+    <div class="total"><b>${state.firstVisit ? "-" : newCount}</b><span>지난 방문 이후 새 공고</span></div>
+    <div class="total good"><b>${activeCount}</b><span>지원 진행 중</span></div>`;
+  $("#updated").textContent = state.fetchedAt ? `마지막 수집 ${state.fetchedAt.replace("T", " ")}` : "";
+
+  // 출처별 상태 칩
+  const chips = [`<button class="chip" data-src="all" aria-pressed="${state.source === "all"}">전체</button>`];
+  for (const [k, s] of Object.entries(state.sources)) {
+    chips.push(`<button class="chip" data-src="${k}" aria-pressed="${state.source === k}" title="${esc(s.error || "정상")}">
+      <i class="${s.error ? "err" : "ok"}"></i>${esc(s.label)} <small>${s.count}</small></button>`);
+  }
+  $("#chips").innerHTML = chips.join("");
+
+  const errs = Object.values(state.sources).filter((s) => s.error);
+  $("#notice").innerHTML = errs.length
+    ? `<div class="notice">${errs.map((s) => `<p><b>${esc(s.label)}</b>: 불러오지 못했어요 (${esc(s.error)})</p>`).join("")}</div>` : "";
+
+  // 지역 드롭다운은 실제 공고에 있는 지역만
+  const regions = [...new Set(state.jobs.map(regionOf).filter(Boolean))].sort((a, b) => REGIONS.indexOf(a) - REGIONS.indexOf(b));
+  if (state.region && !regions.includes(state.region)) regions.push(state.region);
+  $("#fRegion").innerHTML = '<option value="">지역 전체</option>' +
+    regions.map((r) => `<option ${r === state.region ? "selected" : ""}>${r}</option>`).join("");
+  $("#fCareer").value = state.career;
+  $("#sort").value = state.sort;
+
+  for (const [id, on] of [["#fPart", state.part], ["#fSoon", state.soon], ["#fNew", state.onlyNew], ["#fStar", state.starOnly], ["#fClosed", state.hideClosed]])
+    $(id).setAttribute("aria-pressed", on);
+
+  const hiddenByCo = state.jobs.filter((j) => blocked(j) === "company").length;
+  const hiddenByWord = state.jobs.filter((j) => blocked(j) === "word").length;
+  $("#settingsSummary").textContent = hiddenByCo + hiddenByWord ? `— 지금 ${hiddenByCo + hiddenByWord}건 숨김` : "";
+  $("#hiddenList").innerHTML = state.settings.hidden_companies.length
+    ? state.settings.hidden_companies.map((c) => `<span class="pill">${esc(c)}<button data-unhide="${esc(c)}" aria-label="${esc(c)} 다시 보기">×</button></span>`).join("")
+    : '<span class="sub" style="margin:0">없음</span>';
+
+  if (!state.fetchedAt) return;  // 아직 첫 수집 전 (로딩 문구 유지)
+  const list = visibleJobs();
+  $("#countLine").textContent = `${list.length}건 표시 중 (전체 ${state.jobs.length}건)`;
+  if (!list.length) {
+    $("#out").innerHTML = '<div class="empty">조건에 맞는 공고가 없어요. 필터를 풀거나 키워드를 바꿔 보세요.</div>';
+    return;
+  }
+  $("#out").innerHTML = '<ul class="list">' + list.map((j) => rowHtml(j)).join("") + "</ul>";
+}
+
+function ddayHtml(j) {
+  const d = dday(j);
+  if (j.closed) return '<div class="dday none">구직완료</div>';
+  if (d === null) return '<div class="dday none">상시/미정</div>';
+  if (d < 0) return '<div class="dday none">마감</div>';
+  return `<div class="dday ${d <= 3 ? "soon" : ""}">${d === 0 ? "오늘" : "D-" + d}</div>`;
+}
+const fmtDate = (s) => s ? s.slice(5, 10).replace("-", "/") : "";
+
+function rowHtml(j, opts = {}) {
+  const m = state.marks[j.id];
+  const metas = [
+    j.company && `<span class="co">${esc(j.company)}</span>`,
+    j.location && `<span>${esc(j.location)}</span>`,
+    j.career && `<span>${esc(j.career)}</span>`,
+    j.job_type && `<span>${esc(j.job_type)}</span>`,
+    j.deadline_date && `<span>마감 ${fmtDate(j.deadline_date)}</span>`,
+    j.posted_date && `<span>등록 ${fmtDate(j.posted_date)}</span>`,
+    opts.gone && `<span>마지막 확인 ${fmtDate(j.last_seen)}</span>`,
+  ].filter(Boolean).join("");
+  const open = state.open.has(j.id);
+  return `<li class="row ${!opts.board && isNew(j) ? "new" : ""} ${isClosed(j) ? "closed" : ""}" data-id="${esc(j.id)}">
+    ${ddayHtml(j)}
+    <div class="main">
+      <a href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">${esc(j.title)}</a>
+      ${j.part_time ? '<span class="tag pt">파트타임</span>' : ""}${!opts.board && isNew(j) ? '<span class="tag nw">NEW</span>' : ""}${m && m.status && !opts.board ? `<span class="tag st">${esc(m.status)}</span>` : ""}${opts.gone ? '<span class="tag gone">목록에서 내려감</span>' : ""}
+      <p class="meta">${metas}</p>
+      ${m && m.memo && !open ? `<p class="memo-line">${esc(m.memo)}</p>` : ""}
+    </div>
+    <span class="src ${esc(j.source)}">${esc(LABEL[j.source] || j.source)}</span>
+    <button class="star" data-act="star" aria-pressed="${!!m}" aria-label="${m ? "지원 현황에서 빼기" : "관심 공고로 저장"}" title="${m ? "지원 현황에서 빼기" : "관심 공고로 저장"}">★</button>
+    <button class="more" data-act="more" aria-expanded="${open}" aria-label="상태·메모 편집" title="상태·메모 편집">⋯</button>
+    ${open ? editorHtml(j, m) : ""}
+  </li>`;
+}
+
+function editorHtml(j, m) {
+  const st = m?.status || "";
+  return `<div class="editor">
+    <div class="line">
+      <label>상태
+        <select data-act="status">
+          <option value="" ${!st ? "selected" : ""}>— 없음 —</option>
+          ${state.statuses.map((s) => `<option ${s === st ? "selected" : ""}>${s}</option>`).join("")}
+        </select>
+      </label>
+      <span class="spacer"></span>
+      ${j.company ? `<button class="ghost" data-act="hide">‘${esc(j.company)}’ 공고 모두 숨기기</button>` : ""}
+    </div>
+    <textarea data-act="memo" placeholder="메모 (예: 자소서 문항 3개, 연봉 협의, 담당자 연락처…) — 입력창을 벗어나면 저장돼요">${esc(m?.memo || "")}</textarea>
+  </div>`;
+}
+
+function renderBoard() {
+  const marks = state.marks;
+  const current = new Set(state.jobs.map((j) => j.id));
+  const counts = Object.fromEntries(state.statuses.map((s) => [s, 0]));
+  Object.values(marks).forEach((m) => { if (m.status in counts) counts[m.status]++; });
+  $("#funnel").innerHTML = state.statuses.map((s) => `<div><b>${counts[s]}</b><span>${s}</span></div>`).join("");
+
+  const groups = [...state.statuses, ""].map((s) => {
+    const items = Object.entries(marks)
+      .filter(([, m]) => (m.status || "") === s && m.job)
+      .map(([id, m]) => ({ ...m.job, id }))
+      .sort((a, b) => { const x = dday(a) ?? 9999, y = dday(b) ?? 9999; return (x < 0 ? 5000 - x : x) - (y < 0 ? 5000 - y : y); });
+    return { s, items };
+  }).filter((g) => g.items.length);
+
+  if (!groups.length) {
+    $("#board").innerHTML = '<div class="empty">아직 저장한 공고가 없어요. 공고 목록에서 ★를 눌러 보세요.</div>';
+    return;
+  }
+  // 최신 데이터가 있으면 그걸로 보여 준다
+  const latest = Object.fromEntries(state.jobs.map((j) => [j.id, j]));
+  $("#board").innerHTML = groups.map((g) => `
+    <div class="group">
+      <h3>${g.s || "메모만"} <small>${g.items.length}</small></h3>
+      <ul class="list">${g.items.map((j) => rowHtml({ ...j, ...(latest[j.id] || {}) }, { board: true, gone: state.fetchedAt && !current.has(j.id) })).join("")}</ul>
+    </div>`).join("");
+}
+
+/* ───── CSV (보이는 목록) ───── */
+function exportCsv() {
+  const rows = [["출처", "회사", "제목", "마감일", "등록일", "지역", "경력", "고용형태", "파트타임", "내 상태", "메모", "링크"]];
+  for (const j of visibleJobs()) {
+    const m = state.marks[j.id] || {};
+    rows.push([LABEL[j.source], j.company, j.title, j.deadline_date || j.deadline_text, j.posted_date || "", j.location, j.career, j.job_type, j.part_time ? "O" : "", m.status || "", m.memo || "", j.url]);
+  }
+  const csv = "﻿" + rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `채용공고_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ───── 이벤트 ───── */
+$("#presets").innerHTML = '빠른 검색: ' + PRESETS.map((p) => `<button type="button" data-kw="${esc(p)}">${esc(p.includes(",") ? "전부 합쳐서" : p)}</button>`).join("");
+$("#presets").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-kw]"); if (!b) return;
+  $("#keyword").value = b.dataset.kw; load(false);
+});
+$("#searchForm").addEventListener("submit", (e) => { e.preventDefault(); load(false); });
+$("#refresh").addEventListener("click", () => load(true));
+$("#tabJobs").addEventListener("click", () => { state.view = "jobs"; render(); });
+$("#tabTrack").addEventListener("click", () => { state.view = "track"; render(); });
+$("#sort").addEventListener("change", (e) => { state.sort = e.target.value; render(); });
+$("#fRegion").addEventListener("change", (e) => { state.region = e.target.value; render(); });
+$("#fCareer").addEventListener("change", (e) => { state.career = e.target.value; render(); });
+$("#q").addEventListener("input", (e) => { state.q = e.target.value.trim(); render(); });
+for (const [id, k] of [["#fPart", "part"], ["#fSoon", "soon"], ["#fNew", "onlyNew"], ["#fStar", "starOnly"], ["#fClosed", "hideClosed"]])
+  $(id).addEventListener("click", () => { state[k] = !state[k]; render(); });
+$("#chips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-src]"); if (!b) return;
+  state.source = b.dataset.src; render();
+});
+$("#exportCsv").addEventListener("click", exportCsv);
+$("#excludeInput").addEventListener("change", (e) => {
+  saveSettings({ exclude_words: e.target.value.split(/[,，]/).map((s) => s.trim()).filter(Boolean) });
+});
+$("#hiddenList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-unhide]"); if (!b) return;
+  saveSettings({ hidden_companies: state.settings.hidden_companies.filter((c) => c !== b.dataset.unhide) });
+});
+
+// 목록/지원현황 공통: 행 안의 버튼들
+function jobOf(id) { return state.jobs.find((j) => j.id === id) || state.marks[id]?.job; }
+for (const root of ["#out", "#board"]) {
+  $(root).addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-act]"); if (!b || b.tagName === "SELECT" || b.tagName === "TEXTAREA") return;
+    const id = b.closest(".row").dataset.id;
+    if (b.dataset.act === "star") {
+      const m = state.marks[id];
+      if (m && (m.status !== "관심" || m.memo) && !confirm("상태·메모가 있는 공고예요. 지원 현황에서 뺄까요?")) return;
+      await setMark(id, m ? { status: "", memo: "" } : { status: "관심" });
+      render();
+    } else if (b.dataset.act === "more") {
+      state.open.has(id) ? state.open.delete(id) : state.open.add(id);
+      render();
+      document.querySelector(`.row[data-id="${id}"] textarea`)?.focus();
+    } else if (b.dataset.act === "hide") {
+      const co = jobOf(id)?.company; if (!co) return;
+      state.open.delete(id);
+      await saveSettings({ hidden_companies: [...state.settings.hidden_companies, co] });
+      toast(`‘${co}’ 공고를 숨겼어요. 위의 ‘숨긴 회사’에서 되돌릴 수 있어요`);
+    }
+  });
+  $(root).addEventListener("change", async (e) => {
+    if (e.target.dataset.act !== "status") return;
+    const id = e.target.closest(".row").dataset.id;
+    await setMark(id, { status: e.target.value });
+    render();
+  });
+  // 메모: 입력을 멈추고 0.8초 뒤 자동 저장, 입력창을 벗어나면 바로 저장
+  $(root).addEventListener("input", (e) => {
+    if (e.target.dataset.act !== "memo") return;
+    const el = e.target;
+    clearTimeout(memoTimers[el.closest(".row").dataset.id]);
+    memoTimers[el.closest(".row").dataset.id] = setTimeout(() => saveMemo(el), 800);
+  });
+  $(root).addEventListener("focusout", (e) => { if (e.target.dataset.act === "memo") saveMemo(e.target); });
+}
+const memoTimers = {};
+async function saveMemo(el) {
+  const id = el.closest(".row")?.dataset.id; if (!id) return;
+  clearTimeout(memoTimers[id]);
+  const memo = el.value.trim();
+  if (memo === (state.marks[id]?.memo || "")) return;
+  // 메모만 쓰고 상태를 안 골랐으면 '관심'으로 넣어 준다
+  if (await setMark(id, { memo, status: state.marks[id]?.status || (memo ? "관심" : "") }, true)) {
+    toast("메모를 저장했어요");
+    const row = el.closest(".row");
+    row?.querySelector(".star")?.setAttribute("aria-pressed", "true");
+    $("#trackCount").textContent = `(${Object.keys(state.marks).length})`;
+  }
+}
+
+(async () => {
+  await Promise.all([loadMarks(), loadSettings()]);
+  render();
+  load(false);
+})();
+</script>
+</body>
+</html>

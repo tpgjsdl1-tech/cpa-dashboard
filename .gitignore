@@ -1,0 +1,18 @@
+# 개인 데이터 (지원 현황·메모·숨긴 회사)
+data.db
+*.db-journal
+
+# 한공회 진단용 스크린샷·HTML
+debug/
+
+# 파이썬
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 편집기 · OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
