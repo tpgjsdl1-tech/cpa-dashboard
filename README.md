@@ -3,6 +3,8 @@
 잡코리아 · 사람인 · 한국공인회계사회(수습CPA 구인게시판)의 회계사 채용공고를 한 화면에 모아 보고,
 지원 현황까지 관리하는 개인용 웹 대시보드입니다.
 
+![회계사 채용공고 대시보드 화면](docs/screenshot.png)
+
 ## 주요 기능
 
 **공고 모아 보기**
@@ -52,6 +54,7 @@ app.py            수집기 · API 서버 (FastAPI)
 static/index.html 대시보드 화면
 kicpa_debug.py    한공회 수집 진단 도구
 start.bat         Windows 실행 파일
+docs/             README용 화면 캡처
 ```
 
 ## 참고
