@@ -56,7 +56,9 @@ HEADERS = {
     ),
     "Accept-Language": "ko-KR,ko;q=0.9",
 }
-TIMEOUT = 12
+TIMEOUT = 20
+RETRIES = 1            # 시간 초과·연결 오류면 한 번 더 시도
+PER_HOST = 2           # 같은 사이트에 동시에 보내는 요청 수 (키워드가 많아도 사이트에 몰리지 않게)
 PART_TIME_RE = re.compile(r"파트\s?타임|part[\s\-]?time|시간제|(?<![가-힣])파트(?![가-힣])", re.I)
 INTERN_RE = re.compile(r"인턴|intern|체험형|채용연계형", re.I)
 SHORT_RE = re.compile(r"알바|아르바이트|단기|일용|시급|일당|일급|한시|(?<![0-9])[1-6]\s?개월\s?(근무|계약|단기)", re.I)
@@ -122,14 +124,60 @@ def parse_posted(text: str):
         return None
 
 
+# ───────────────────────── 근무기간 ─────────────────────────
+# 알바몬은 근무기간을 정해진 값으로 알려 준다 → (최소 일수, 표시 이름)
+ALBAMON_PERIODS = {
+    "하루": (1, "하루"), "1주일이하": (7, "1주일 이하"), "1주일~1개월": (8, "1주일~1개월"),
+    "1개월~3개월": (30, "1~3개월"), "3개월~6개월": (90, "3~6개월"), "6개월~1년": (180, "6개월~1년"),
+    "1년이상": (365, "1년 이상"),
+}
+_UNIT_DAYS = {"일": 1, "주": 7, "개월": 30, "달": 30, "년": 365}
+# 숫자 + 단위. '주5일'의 '5일', '경력 3년', '2026년' 같은 오탐을 막으려고 일·주·년은 뒤에 기간을 뜻하는 말이 올 때만
+_PERIOD_RE = re.compile(
+    r"(?<![\d.,])(\d{1,2})\s?(?:~\s?(\d{1,2})\s?)?"
+    r"(개월|달(?=\s?(?:간|짜리|단기|계약|근무|알바|$|\W))"
+    r"|일(?=\s?(?:간|짜리|단기|알바|근무|\)))|주(?=\s?(?:간|짜리|단기|알바|근무|\)))"
+    r"|년(?=\s?(?:간|계약|근무|단기)))")
+_PERIOD_SKIP_BEFORE = re.compile(r"(수습|경력|교육|주|매월|월|최소|전환)\s?$")
+
+
+def parse_period(text: str, job_type: str = ""):
+    """제목·고용형태 글자에서 근무기간을 찾는다 → (최소 일수, 표시 이름) 또는 (None, '').
+    '3개월', '2달 단기', '3~6개월'(앞 숫자 기준), '5일간', '1년 계약', '하루 알바' 등을 인식하고
+    '수습 3개월', '경력 6개월'처럼 근무기간이 아닌 숫자는 건너뛴다. 못 찾았는데 정규직이면 '정규직'."""
+    t = re.sub(r"(경력|수습|교육)\s?(기간)?\s?\d+\s?(년|개월|달)(\s?\d+\s?개월)?", " ", text or "")  # 근무기간이 아닌 숫자 제거
+    t = re.sub(r"\d{1,2}\s?월\s?\d{1,2}\s?일", " ", t)  # '12월 1일' 같은 날짜
+    if re.search(r"하루|당일|일일\s?알바|1일\s?(알바|근무|단기)", t):
+        return 1, "하루"
+    m = re.search(r"(?<!\d)(\d)\s?년\s?(\d{1,2})\s?개월", t)  # '1년 5개월'
+    if m and not _PERIOD_SKIP_BEFORE.search(t[max(0, m.start() - 4):m.start()]):
+        y, mo = int(m.group(1)), int(m.group(2))
+        return y * 365 + mo * 30, f"{y}년 {mo}개월"
+    for m in _PERIOD_RE.finditer(t):
+        if _PERIOD_SKIP_BEFORE.search(t[max(0, m.start() - 4):m.start()]):
+            continue
+        n, upto, unit = int(m.group(1)), m.group(2), m.group(3)
+        if n == 0:
+            continue
+        unit = "개월" if unit == "달" else unit
+        if unit == "개월" and n % 12 == 0 and not upto:  # 12개월 = 1년
+            n, unit = n // 12, "년"
+        label = f"{n}~{upto}{unit}" if upto else f"{n}{unit}"
+        return n * _UNIT_DAYS[unit], label  # 범위면 짧은 쪽 기준
+    if re.search(r"정규직", f"{t} {job_type}") and "계약" not in job_type:
+        return 365, "정규직"
+    return None, ""
+
+
 def make_job(source, title, company, url, location="", career="", job_type="",
              deadline_text="", deadline_date=None, extra="", key=None, posted=None, closed=False,
-             pay="", part_time=None, short_term=None, intern=None):
+             pay="", part_time=None, short_term=None, intern=None, period=None):
     """key: 공고를 구분하는 고유값 (없으면 url). 즐겨찾기/지원 현황이 이 값으로 연결된다.
-    part_time/short_term/intern: 사이트가 알려 주면 그 값을, 아니면 제목·조건 글자로 추정."""
+    part_time/short_term/intern/period: 사이트가 알려 주면 그 값을, 아니면 제목·조건 글자로 추정."""
     deadline_date = deadline_date or parse_deadline(deadline_text)
     blob = " ".join([title or "", job_type or "", extra or ""])
     head = " ".join([title or "", job_type or ""])  # 본문 전체까지 보면 오탐이 많아 제목·고용형태만
+    period_days, period_label = period or parse_period(head, job_type)
     return {
         "id": hashlib.md5((key or url).encode()).hexdigest()[:12],
         "source": source,
@@ -146,13 +194,35 @@ def make_job(source, title, company, url, location="", career="", job_type="",
         "part_time": bool(PART_TIME_RE.search(blob)) if part_time is None else bool(part_time),
         "short_term": bool(SHORT_RE.search(head)) if short_term is None else bool(short_term),
         "intern": bool(INTERN_RE.search(head)) if intern is None else bool(intern),
+        "period_days": period_days,      # 근무기간의 최소 일수 (모르면 None)
+        "period_label": period_label,    # 화면 표시용: '3개월', '1주일 이하', '정규직' 등
         "closed": bool(closed),
     }
 
 
+_host_locks: dict[str, threading.BoundedSemaphore] = {}
+_host_locks_guard = threading.Lock()
+
+
+def http_get(url, **kwargs):
+    """사이트별 동시 요청 수를 제한하고, 시간 초과·연결 오류는 한 번 더 시도한다."""
+    host = urlparse(url).netloc
+    with _host_locks_guard:
+        sem = _host_locks.setdefault(host, threading.BoundedSemaphore(PER_HOST))
+    for attempt in range(RETRIES + 1):
+        try:
+            with sem:
+                r = requests.get(url, headers=HEADERS, timeout=TIMEOUT, **kwargs)
+            r.raise_for_status()
+            return r
+        except (requests.Timeout, requests.ConnectionError):
+            if attempt == RETRIES:
+                raise
+            time.sleep(1.5)
+
+
 def get_html(url, **kwargs):
-    r = requests.get(url, headers=HEADERS, timeout=TIMEOUT, **kwargs)
-    r.raise_for_status()
+    r = http_get(url, **kwargs)
     if not r.encoding or r.encoding.lower() == "iso-8859-1":
         r.encoding = r.apparent_encoding
     return BeautifulSoup(r.text, "html.parser")
@@ -273,9 +343,7 @@ def fetch_albamon(keyword, pages=2):
     keyword = re.sub(r"알바|아르바이트", "", keyword).strip() or keyword
     jobs = []
     for page in range(1, pages + 1):
-        r = requests.get("https://www.albamon.com/total-search", params={"keyword": keyword, "page": page},
-                         headers=HEADERS, timeout=TIMEOUT)
-        r.raise_for_status()
+        r = http_get("https://www.albamon.com/total-search", params={"keyword": keyword, "page": page})
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.content.decode("utf-8", "replace"), re.S)
         if not m:
             raise RuntimeError("알바몬 화면 구조가 바뀌었어요 (__NEXT_DATA__ 없음)")
@@ -306,6 +374,8 @@ def fetch_albamon(keyword, pages=2):
                 posted=_relative_posted(it.get("postedDate", "")),
                 pay=f"{pay_type} {it.get('pay', '')}".strip(),
                 short_term=period in ALBAMON_SHORT_PERIODS or bool(SHORT_RE.search(it["recruitTitle"])),
+                # 알바몬이 준 근무기간이 우선, '기간협의' 등 정해지지 않은 값이면 제목에서 찾는다
+                period=ALBAMON_PERIODS.get(period.replace(" ", "")) or parse_period(it["recruitTitle"]),
             ))
         if len(items) < 20:
             break

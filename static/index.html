@@ -110,6 +110,7 @@
   .chip i.ok { background: var(--ledger); }
   .chip i.err { background: var(--urgent); }
   .chip small { opacity: .75; font-variant-numeric: tabular-nums; }
+  .meta .per { color: var(--ink); }
   .spacer { flex: 1; }
   select { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1.5px solid var(--rule); background: var(--card); color: var(--ink); max-width: 100%; }
   .count-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 14px 0 6px; font-size: 13px; color: var(--ink-soft); }
@@ -244,6 +245,7 @@
         <option value="exp">경력직</option>
       </select>
     </div>
+    <div class="filters" id="periodChips" role="group" aria-label="근무기간"></div>
     <div class="filters">
       <span class="sub" style="margin:0">근무형태</span>
       <button class="chip" data-kind="intern" aria-pressed="false">인턴</button>
@@ -261,6 +263,7 @@
           <option value="recent">최근 등록순</option>
           <option value="company">회사명순</option>
           <option value="source">출처별</option>
+          <option value="period">근무기간 짧은순</option>
         </select>
       </label>
     </div>
@@ -311,7 +314,7 @@ const state = {
   jobs: [], sources: {}, fetchedAt: null,
   source: "all", kinds: new Set(), soon: false, onlyNew: false, starOnly: false,
   hideClosed: saved.hideClosed ?? true, sort: saved.sort || "deadline",
-  q: "", region: saved.region || "", career: saved.career || "",
+  q: "", region: saved.region || "", career: saved.career || "", period: saved.period || "",
   statuses: ["관심", "지원예정", "지원완료", "서류합격", "면접", "최종합격", "불합격"],
   marks: {},                                  // id → {status, memo, job}
   settings: { hidden_companies: [], exclude_words: [] },
@@ -425,7 +428,25 @@ async function saveSettings(patch) {
 }
 
 /* ───── 필터/정렬 ───── */
-function visibleJobs() {
+// 근무기간 구분: [값, 버튼 이름, 설명]. '이상'은 누적 (6개월 이상에는 1년 이상도 포함)
+const PERIODS = [
+  ["", "전체"],
+  ["le7", "1주일 이내", "하루 ~ 7일"],
+  ["30", "1개월 이상"],
+  ["90", "3개월 이상"],
+  ["180", "6개월 이상"],
+  ["365", "1년 이상", "기간 정함 없는 정규직 포함"],
+  ["none", "기간 정보 없음", "공고 제목·조건에 근무기간이 적혀 있지 않은 공고"],
+];
+function periodOk(j, key) {
+  const d = j.period_days;
+  if (!key) return true;
+  if (key === "none") return d == null;
+  if (d == null) return false;
+  return key === "le7" ? d <= 7 : d >= Number(key);
+}
+
+function visibleJobs(ignorePeriod = false) {
   const q = state.q.toLowerCase();
   let list = state.jobs.filter((j) => {
     const d = dday(j);
@@ -438,6 +459,7 @@ function visibleJobs() {
     if (state.hideClosed && isClosed(j)) return false;
     if (state.region && regionOf(j) !== state.region) return false;
     if (!careerOk(j)) return false;
+    if (!ignorePeriod && !periodOk(j, state.period)) return false;
     if (q && !`${j.title} ${j.company} ${j.location}`.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -446,13 +468,14 @@ function visibleJobs() {
     recent: (j) => -Date.parse(j.posted_date || j.first_seen || 0),
     company: (j) => j.company,
     source: (j) => j.source,
+    period: (j) => j.period_days ?? 99999,  // 기간 모름은 맨 뒤
   }[state.sort];
   return list.sort((a, b) => { const x = key(a), y = key(b); return x < y ? -1 : x > y ? 1 : 0; });
 }
 
 /* ───── 화면 ───── */
 function render() {
-  store.set("filters", { hideClosed: state.hideClosed, sort: state.sort, region: state.region, career: state.career });
+  store.set("filters", { hideClosed: state.hideClosed, sort: state.sort, region: state.region, career: state.career, period: state.period });
   const marks = Object.values(state.marks);
   $("#trackCount").textContent = marks.length ? `(${marks.length})` : "";
   $("#tabJobs").setAttribute("aria-selected", state.view === "jobs");
@@ -491,6 +514,10 @@ function render() {
   $("#fRegion").innerHTML = '<option value="">지역 전체</option>' +
     regions.map((r) => `<option ${r === state.region ? "selected" : ""}>${r}</option>`).join("");
   $("#fCareer").value = state.career;
+  // 근무기간 버튼: 다른 필터는 그대로 두고 기간만 바꿨을 때 몇 건인지 함께 보여 준다
+  const base = visibleJobs(true);
+  $("#periodChips").innerHTML = '<span class="sub" style="margin:0">근무기간</span>' + PERIODS.map(([k, label, hint]) =>
+    `<button class="chip" data-period="${k}" aria-pressed="${state.period === k}" title="${esc(hint || "")}">${label} <small>${base.filter((j) => periodOk(j, k)).length}</small></button>`).join("");
   $("#sort").value = state.sort;
 
   document.querySelectorAll("[data-kind]").forEach((b) => b.setAttribute("aria-pressed", state.kinds.has(b.dataset.kind)));
@@ -531,6 +558,7 @@ function rowHtml(j, opts = {}) {
     j.career && `<span>${esc(j.career)}</span>`,
     j.job_type && `<span>${esc(j.job_type)}</span>`,
     j.pay && `<span>${esc(j.pay)}</span>`,
+    j.period_label && !(j.period_label === "정규직" && /정규직/.test(j.job_type)) && `<span class="per">근무기간 ${esc(j.period_label)}</span>`,
     j.deadline_date && `<span>마감 ${fmtDate(j.deadline_date)}</span>`,
     j.posted_date && `<span>등록 ${fmtDate(j.posted_date)}</span>`,
     opts.gone && `<span>마지막 확인 ${fmtDate(j.last_seen)}</span>`,
@@ -598,10 +626,10 @@ function renderBoard() {
 
 /* ───── CSV (보이는 목록) ───── */
 function exportCsv() {
-  const rows = [["출처", "회사", "제목", "마감일", "등록일", "지역", "경력", "고용형태", "급여", "인턴", "알바·단기", "파트타임", "내 상태", "메모", "링크"]];
+  const rows = [["출처", "회사", "제목", "마감일", "등록일", "지역", "경력", "고용형태", "근무기간", "급여", "인턴", "알바·단기", "파트타임", "내 상태", "메모", "링크"]];
   for (const j of visibleJobs()) {
     const m = state.marks[j.id] || {};
-    rows.push([LABEL[j.source], j.company, j.title, j.deadline_date || j.deadline_text, j.posted_date || "", j.location, j.career, j.job_type, j.pay || "", j.intern ? "O" : "", isShort(j) ? "O" : "", j.part_time ? "O" : "", m.status || "", m.memo || "", j.url]);
+    rows.push([LABEL[j.source], j.company, j.title, j.deadline_date || j.deadline_text, j.posted_date || "", j.location, j.career, j.job_type, j.period_label || "", j.pay || "", j.intern ? "O" : "", isShort(j) ? "O" : "", j.part_time ? "O" : "", m.status || "", m.memo || "", j.url]);
   }
   const csv = "﻿" + rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const a = document.createElement("a");
@@ -623,6 +651,10 @@ $("#tabTrack").addEventListener("click", () => { state.view = "track"; render();
 $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; render(); });
 $("#fRegion").addEventListener("change", (e) => { state.region = e.target.value; render(); });
 $("#fCareer").addEventListener("change", (e) => { state.career = e.target.value; render(); });
+$("#periodChips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-period]"); if (!b) return;
+  state.period = b.dataset.period; render();
+});
 $("#q").addEventListener("input", (e) => { state.q = e.target.value.trim(); render(); });
 document.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => {
   const k = b.dataset.kind; state.kinds.has(k) ? state.kinds.delete(k) : state.kinds.add(k); render();
