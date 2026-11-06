@@ -1,4 +1,6 @@
-"""회계사 채용공고 대시보드 - 백엔드 (FastAPI)
+"""회계·세무 채용공고 대시보드 - 백엔드 (FastAPI)
+
+수집 사이트: 잡코리아 · 사람인 · 인크루트 · 알바몬 · 고용24 · 한공회(수습CPA 구인게시판)
 
 실행:
     pip install -r requirements.txt
@@ -55,14 +57,18 @@ HEADERS = {
     "Accept-Language": "ko-KR,ko;q=0.9",
 }
 TIMEOUT = 12
-PART_TIME_RE = re.compile(r"파트\s?타임|part[\s\-]?time|시간제|단기|(?<![가-힣])파트(?![가-힣])", re.I)
+PART_TIME_RE = re.compile(r"파트\s?타임|part[\s\-]?time|시간제|(?<![가-힣])파트(?![가-힣])", re.I)
+INTERN_RE = re.compile(r"인턴|intern|체험형|채용연계형", re.I)
+SHORT_RE = re.compile(r"알바|아르바이트|단기|일용|시급|일당|일급|한시|(?<![0-9])[1-6]\s?개월\s?(근무|계약|단기)", re.I)
+# 알바몬의 근무기간 중 '단기'로 볼 것
+ALBAMON_SHORT_PERIODS = ("하루", "1주일이하", "1주일~1개월", "1개월~3개월", "3개월~6개월")
 
 # 지원 상태 (화면의 순서와 같음)
 STATUSES = ["관심", "지원예정", "지원완료", "서류합격", "면접", "최종합격", "불합격"]
 DEFAULT_SETTINGS = {
     "hidden_companies": [],
-    # 잡코리아에서 'CPA'(광고 단가) 마케팅 공고가 섞여 나와서 기본으로 제외
-    "exclude_words": ["마케터", "마케팅", "퍼포먼스", "광고대행"],
+    # 잡코리아에서 'CPA'(광고 단가) 마케팅 공고가, 알바몬에서 수강생 모집 광고가 섞여 나와서 기본으로 제외
+    "exclude_words": ["마케터", "마케팅", "퍼포먼스", "광고대행", "취업교육", "기초교육", "교육생"],
 }
 
 
@@ -73,7 +79,7 @@ def parse_deadline(text: str):
         return None
     t = text.strip()
     today = date.today()
-    if "오늘" in t and "마감" in t:
+    if ("오늘" in t and "마감" in t) or re.search(r"(?<![\d/.~])\d{1,2}\s?시\s?마감", t):  # '23시 마감' = 오늘
         return today
     if "내일" in t and "마감" in t:
         return today + timedelta(days=1)
@@ -117,10 +123,13 @@ def parse_posted(text: str):
 
 
 def make_job(source, title, company, url, location="", career="", job_type="",
-             deadline_text="", deadline_date=None, extra="", key=None, posted=None, closed=False):
-    """key: 공고를 구분하는 고유값 (없으면 url). 즐겨찾기/지원 현황이 이 값으로 연결된다."""
+             deadline_text="", deadline_date=None, extra="", key=None, posted=None, closed=False,
+             pay="", part_time=None, short_term=None, intern=None):
+    """key: 공고를 구분하는 고유값 (없으면 url). 즐겨찾기/지원 현황이 이 값으로 연결된다.
+    part_time/short_term/intern: 사이트가 알려 주면 그 값을, 아니면 제목·조건 글자로 추정."""
     deadline_date = deadline_date or parse_deadline(deadline_text)
     blob = " ".join([title or "", job_type or "", extra or ""])
+    head = " ".join([title or "", job_type or ""])  # 본문 전체까지 보면 오탐이 많아 제목·고용형태만
     return {
         "id": hashlib.md5((key or url).encode()).hexdigest()[:12],
         "source": source,
@@ -133,7 +142,10 @@ def make_job(source, title, company, url, location="", career="", job_type="",
         "deadline_text": (deadline_text or "").strip()[:80],
         "deadline_date": deadline_date.isoformat() if deadline_date else None,
         "posted_date": posted.isoformat() if posted else None,
-        "part_time": bool(PART_TIME_RE.search(blob)),
+        "pay": re.sub(r"\s+", " ", pay or "").strip(),
+        "part_time": bool(PART_TIME_RE.search(blob)) if part_time is None else bool(part_time),
+        "short_term": bool(SHORT_RE.search(head)) if short_term is None else bool(short_term),
+        "intern": bool(INTERN_RE.search(head)) if intern is None else bool(intern),
         "closed": bool(closed),
     }
 
@@ -209,6 +221,129 @@ def fetch_jobkorea(keyword):
             career=career.group(0).strip() if career else "",
             deadline_text=dl.group(0) if dl else "",
             extra=text,
+        ))
+    return jobs
+
+
+# ───────────────────────── 인크루트 ─────────────────────────
+def fetch_incruit(keyword):
+    soup = get_html("https://search.incruit.com/list/search.asp", params={"col": "job", "kw": keyword})
+    jobs = []
+    for row in soup.select("li.c_col"):
+        a = row.select_one('a[href*="jobdb_info/jobpost.asp"]')
+        if not a:
+            continue
+        m = re.search(r"job=(\d+)", a["href"])
+        url = f"https://job.incruit.com/jobdb_info/jobpost.asp?job={m.group(1)}" if m else a["href"]
+        co = row.select_one("a.cpname")
+        conds = [s.get_text(strip=True) for s in row.select(".cell_mid .cl_md span")]
+        last = " ".join(s.get_text(strip=True) for s in row.select(".cell_last span"))
+        # 조건 칸: 지역 · 경력 · 학력 · 고용형태 순
+        jobs.append(make_job(
+            "incruit", a.get_text(), co.get_text(strip=True) if co else "", url,  # 강조 표시 앞뒤에 공백이 끼지 않게
+            location=conds[0] if conds else "",
+            career=next((c for c in conds if "경력" in c or "신입" in c), ""),
+            job_type=next((c for c in conds if re.search(r"정규|계약|인턴|아르바이트|파견|프리랜서|위촉", c)), ""),
+            deadline_text=last, extra=row.get_text(" ", strip=True),
+            key=f"incruit:{m.group(1)}" if m else None,
+        ))
+    return jobs
+
+
+# ───────────────────────── 알바몬 ─────────────────────────
+def _relative_posted(text):
+    """알바몬 등록 시각: '23분전', '5시간전', '3일전', '2026.11.01' 등"""
+    if not text:
+        return None
+    if re.search(r"(분|시간)\s?전|방금|오늘", text):
+        return date.today()
+    m = re.search(r"(\d+)\s?일\s?전", text)
+    if m:
+        return date.today() - timedelta(days=int(m.group(1)))
+    return parse_posted(text)
+
+
+ALBAMON_OFFICE_RE = re.compile(r"사무|경리|회계|세무|재무|총무|인사|금융|보험|비서|문서|데이터|자료|전산|ERP|행정|은행|증권", re.I)
+
+
+def fetch_albamon(keyword, pages=2):
+    """알바몬 통합검색 화면의 Next.js 데이터(__NEXT_DATA__)에서 공고 목록을 읽는다.
+    알바몬은 전부 알바라서 '알바'를 붙이면 오히려 검색이 흐려지므로 빼고 찾고,
+    업직종(parts)이 사무·회계 계열인 공고만 남긴다 ('남동세무서점' 같은 식당 공고 제외)."""
+    keyword = re.sub(r"알바|아르바이트", "", keyword).strip() or keyword
+    jobs = []
+    for page in range(1, pages + 1):
+        r = requests.get("https://www.albamon.com/total-search", params={"keyword": keyword, "page": page},
+                         headers=HEADERS, timeout=TIMEOUT)
+        r.raise_for_status()
+        m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.content.decode("utf-8", "replace"), re.S)
+        if not m:
+            raise RuntimeError("알바몬 화면 구조가 바뀌었어요 (__NEXT_DATA__ 없음)")
+        items = []
+        for q in json.loads(m.group(1))["props"]["pageProps"].get("dehydratedState", {}).get("queries", []):
+            if q.get("queryKey", [None])[0] == "SEARCH_RECRUIT_LIST":
+                items = (((q.get("state") or {}).get("data") or {}).get("base") or {}).get("normal", {}).get("collection", [])
+                break
+        for it in items:
+            no = it.get("recruitNo")
+            if not no or not it.get("recruitTitle"):
+                continue
+            period = it.get("workingPeriod") or ""
+            pay_type = (it.get("payType") or {}).get("description", "")
+            parts = it.get("parts") or []
+            if parts and not any(ALBAMON_OFFICE_RE.search(p) for p in parts):
+                continue
+            closing = it.get("closingDate") or ""
+            jobs.append(make_job(
+                "albamon", it["recruitTitle"], it.get("companyName", ""),
+                f"https://www.albamon.com/jobs/detail/{no}",
+                location=it.get("workplaceArea", ""),
+                job_type=" · ".join(x for x in [period, it.get("workingWeek") or "", it.get("workingTime") or ""] if x),
+                deadline_date=parse_posted(closing),
+                deadline_text=closing,
+                extra=" ".join([*parts, period]),
+                key=f"albamon:{no}",
+                posted=_relative_posted(it.get("postedDate", "")),
+                pay=f"{pay_type} {it.get('pay', '')}".strip(),
+                short_term=period in ALBAMON_SHORT_PERIODS or bool(SHORT_RE.search(it["recruitTitle"])),
+            ))
+        if len(items) < 20:
+            break
+    return jobs
+
+
+# ───────────────────────── 고용24 (워크넷) ─────────────────────────
+def fetch_work24(keyword):
+    """고용노동부 고용24 채용정보 상세검색. 제목에 키워드가 들어간 공고만 (본문까지 찾으면 무관한 공고가 많음)."""
+    soup = get_html(
+        "https://www.work24.go.kr/wk/a/b/1200/retriveDtlEmpSrchList.do",
+        params={"srcKeyword": keyword, "keywordWantedTitle": "Y", "pageIndex": 1, "resultCnt": 50,
+                "sortField": "DATE", "sortOrderBy": "DESC"},
+    )
+    jobs = []
+    for tr in soup.select('tr[id^="list"]'):
+        a = tr.select_one('a[href*="wantedAuthNo="]')
+        if not a:
+            continue
+        no = re.search(r"wantedAuthNo=([A-Za-z0-9]+)", a["href"]).group(1)
+        co = tr.select_one("a.cp_name")
+        text = re.sub(r"\s+", " ", tr.get_text(" ", strip=True))
+        info = lambda cls: re.sub(r"\s+", " ", (tr.select_one(f"li.{cls}") or BeautifulSoup("", "html.parser")).get_text(" ", strip=True))
+        member, worktime = info("member"), info("time")
+        hours = re.search(r"주\s?(\d+)\s?시간", worktime)
+        dl = re.search(r"마감일\s?:\s?([\d\-]+)", text)
+        reg = re.search(r"등록일\s?:\s?([\d\-]+)", text)
+        jobs.append(make_job(
+            "work24", a.get_text(" ", strip=True), co.get_text(strip=True) if co else "",
+            urljoin("https://www.work24.go.kr", a["href"]),
+            location=info("site"),
+            career=next((w for w in member.split(" ") if "경력" in w or "신입" in w), ""),
+            job_type=worktime,
+            deadline_text=dl.group(1) if dl else "",
+            extra=text, key=f"work24:{no}",
+            posted=parse_posted(reg.group(1)) if reg else None,
+            pay=info("dollar"),
+            part_time=(hours and int(hours.group(1)) < 35) or None,
         ))
     return jobs
 
@@ -334,8 +469,12 @@ def parse_kicpa_rows(rows):
 SOURCES = {
     "jobkorea": ("잡코리아", fetch_jobkorea),
     "saramin": ("사람인", fetch_saramin),
+    "incruit": ("인크루트", fetch_incruit),
+    "albamon": ("알바몬", fetch_albamon),
+    "work24": ("고용24", fetch_work24),
     "kicpa": ("한공회", fetch_kicpa),
 }
+DEFAULT_KEYWORD = "공인회계사, 회계, 세무"
 KEYWORDLESS = {"kicpa"}  # 키워드와 상관없이 한 번만 수집
 
 
@@ -405,7 +544,7 @@ _cache = {}
 
 def split_keywords(keyword):
     kws = [k.strip() for k in re.split(r"[,，]", keyword or "") if k.strip()]
-    return list(dict.fromkeys(kws)) or ["공인회계사"]
+    return list(dict.fromkeys(kws)) or split_keywords(DEFAULT_KEYWORD)
 
 
 def collect(keyword):
@@ -422,7 +561,7 @@ def collect(keyword):
             return src, kw, [], f"{type(e).__name__}: {e}"
 
     results = []
-    with ThreadPoolExecutor(max_workers=min(8, len(tasks))) as pool:
+    with ThreadPoolExecutor(max_workers=min(10, len(tasks))) as pool:
         for src, kw, jobs, err in pool.map(run, tasks):
             for j in jobs:
                 j.setdefault("keywords", []).append(kw)
@@ -451,12 +590,12 @@ def collect(keyword):
 
 
 # ───────────────────────── API ─────────────────────────
-app = FastAPI(title="회계사 채용공고 대시보드")
+app = FastAPI(title="회계·세무 채용공고 대시보드")
 init_db()
 
 
 @app.get("/api/jobs")
-def api_jobs(keyword: str = Query("공인회계사"), refresh: bool = False):
+def api_jobs(keyword: str = Query(DEFAULT_KEYWORD), refresh: bool = False):
     now = time.time()
     ck = ",".join(split_keywords(keyword))
     hit = _cache.get(ck)

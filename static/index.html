@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>회계사 채용 공고</title>
+<title>회계·세무 채용 공고</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <style>
   :root {
@@ -20,6 +20,9 @@
     --jobkorea: #2358c9;
     --saramin: #b85c00;
     --kicpa: #1f6b52;
+    --incruit: #6a3fb5;
+    --albamon: #c2255c;
+    --work24: #0e7490;
     --font: "Pretendard", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
@@ -37,6 +40,9 @@
       --jobkorea: #7ea6ff;
       --saramin: #ffb066;
       --kicpa: #5cc19c;
+      --incruit: #b79cff;
+      --albamon: #ff8fb1;
+      --work24: #67d4e8;
     }
   }
   * { box-sizing: border-box; }
@@ -139,14 +145,19 @@
   .memo-line { margin: 4px 0 0; font-size: 13px; color: var(--ink); background: var(--card); border-left: 3px solid var(--gold); padding: 3px 8px; white-space: pre-wrap; }
   .tag { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 4px; margin-left: 6px; vertical-align: 2px; white-space: nowrap; }
   .tag.pt { background: var(--ledger); color: #fff; }
+  .tag.in { background: var(--jobkorea); color: #fff; }
+  .tag.sh { background: var(--albamon); color: #fff; }
   .tag.nw { background: var(--ink); color: var(--paper); }
   .tag.st { background: var(--gold); color: #fff; }
   .tag.gone { background: var(--rule); color: var(--ink); }
-  @media (prefers-color-scheme: dark) { .tag.pt, .tag.st { color: #0b1812; } }
+  @media (prefers-color-scheme: dark) { .tag.pt, .tag.st, .tag.in, .tag.sh { color: #0b1812; } }
   .src { font-size: 12.5px; font-weight: 700; padding-top: 4px; white-space: nowrap; }
   .src.jobkorea { color: var(--jobkorea); }
   .src.saramin { color: var(--saramin); }
   .src.kicpa { color: var(--kicpa); }
+  .src.incruit { color: var(--incruit); }
+  .src.albamon { color: var(--albamon); }
+  .src.work24 { color: var(--work24); }
   .star { border: 0; background: none; font-size: 20px; line-height: 1; padding: 2px 4px; color: var(--rule); }
   .star[aria-pressed="true"] { color: var(--gold); }
   .more { border: 0; background: none; font-size: 18px; line-height: 1; padding: 2px 6px; color: var(--ink-soft); }
@@ -190,8 +201,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>회계사 채용 공고</h1>
-  <p class="sub" id="updated">잡코리아, 사람인, 한공회 구인게시판을 한 번에 모아 봐요.</p>
+  <h1>회계·세무 채용 공고</h1>
+  <p class="sub" id="updated">잡코리아 · 사람인 · 인크루트 · 알바몬 · 고용24 · 한공회의 회계·세무 정규직, 인턴, 알바를 한 번에 모아 봐요.</p>
 
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" id="tabJobs" aria-selected="true">공고 목록</button>
@@ -201,7 +212,7 @@
   <!-- ───── 공고 목록 ───── -->
   <section id="viewJobs">
     <form class="search" id="searchForm">
-      <input id="keyword" type="search" value="공인회계사" aria-label="검색 키워드" placeholder="쉼표로 여러 개: 공인회계사, 수습CPA, 회계법인">
+      <input id="keyword" type="search" value="공인회계사, 회계, 세무" aria-label="검색 키워드" placeholder="쉼표로 여러 개: 공인회계사, 회계 인턴, 세무 알바">
       <button class="primary" type="submit" id="searchBtn">검색</button>
       <button type="button" id="refresh" title="캐시를 무시하고 다시 불러와요">새로고침</button>
     </form>
@@ -234,7 +245,11 @@
       </select>
     </div>
     <div class="filters">
-      <button class="chip" id="fPart" aria-pressed="false">파트타임만</button>
+      <span class="sub" style="margin:0">근무형태</span>
+      <button class="chip" data-kind="intern" aria-pressed="false">인턴</button>
+      <button class="chip" data-kind="short" aria-pressed="false">알바·단기</button>
+      <button class="chip" data-kind="part" aria-pressed="false">파트타임</button>
+      <span class="spacer" style="flex:0 0 8px"></span>
       <button class="chip" id="fSoon" aria-pressed="false">마감 7일 이내</button>
       <button class="chip" id="fNew" aria-pressed="false">새 공고만</button>
       <button class="chip" id="fStar" aria-pressed="false">★ 지원 현황에 있는 것만</button>
@@ -278,8 +293,15 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const LABEL = { jobkorea: "잡코리아", saramin: "사람인", kicpa: "한공회" };
-const PRESETS = ["공인회계사", "수습CPA", "회계법인", "공인회계사, 수습CPA, 회계법인"];
+const LABEL = { jobkorea: "잡코리아", saramin: "사람인", incruit: "인크루트", albamon: "알바몬", work24: "고용24", kicpa: "한공회" };
+const DEFAULT_KW = "공인회계사, 회계, 세무";
+const PRESETS = [  // [버튼 이름, 검색 키워드]
+  ["기본", DEFAULT_KW],
+  ["회계사", "공인회계사, 수습CPA, 회계법인"],
+  ["회계·세무 사무", "회계, 세무, 경리"],
+  ["알바·단기", "회계 알바, 세무 알바, 경리 알바"],
+  ["인턴", "회계 인턴, 세무 인턴, 재무 인턴"],
+];
 const ACTIVE = ["지원예정", "지원완료", "서류합격", "면접"];  // '진행 중'으로 셀 상태
 const REGIONS = ["서울", "경기", "인천", "부산", "대구", "대전", "광주", "울산", "세종", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"];
 
@@ -287,7 +309,7 @@ const saved = store.get("filters", {});
 const state = {
   view: "jobs",
   jobs: [], sources: {}, fetchedAt: null,
-  source: "all", part: false, soon: false, onlyNew: false, starOnly: false,
+  source: "all", kinds: new Set(), soon: false, onlyNew: false, starOnly: false,
   hideClosed: saved.hideClosed ?? true, sort: saved.sort || "deadline",
   q: "", region: saved.region || "", career: saved.career || "",
   statuses: ["관심", "지원예정", "지원완료", "서류합격", "면접", "최종합격", "불합격"],
@@ -297,7 +319,8 @@ const state = {
   seen: new Set(store.get("seen", [])),       // 지난 방문 때 본 공고
   firstVisit: store.get("seen", null) === null,
 };
-$("#keyword").value = store.get("keyword", "공인회계사");
+const savedKw = store.get("keyword", DEFAULT_KW);
+$("#keyword").value = savedKw === "공인회계사" ? DEFAULT_KW : savedKw;  // 예전 기본값이면 새 기본값으로
 
 /* ───── 계산 ───── */
 function dday(job) {
@@ -308,7 +331,11 @@ function dday(job) {
 }
 const isNew = (j) => !state.firstVisit && !state.seen.has(j.id);
 const isClosed = (j) => j.closed || (dday(j) ?? 0) < 0;
-const regionOf = (j) => REGIONS.find((r) => (j.location || "").startsWith(r)) || "";
+// 사이트마다 '경상남도', '경남'처럼 다르게 써서 앞글자로 맞춘다
+const REGION_RE = { 충북: /^(충북|충청북)/, 충남: /^(충남|충청남)/, 전북: /^(전북|전라북)/, 전남: /^(전남|전라남)/, 경북: /^(경북|경상북)/, 경남: /^(경남|경상남)/ };
+const regionOf = (j) => { const l = (j.location || "").trim(); return REGIONS.find((r) => (REGION_RE[r] || new RegExp("^" + r)).test(l)) || ""; };
+const isShort = (j) => j.short_term || j.source === "albamon";  // 알바몬 공고는 모두 알바로 본다
+const KIND_TEST = { intern: (j) => j.intern, short: isShort, part: (j) => j.part_time };
 const normCo = (s) => (s || "").replace(/\s|\(주\)|㈜|주식회사/g, "").toLowerCase();
 function careerOk(j) {
   const c = j.career || "";
@@ -338,7 +365,7 @@ function toast(msg) {
 async function load(refresh = false) {
   $("#out").innerHTML = '<div class="loading">공고를 불러오는 중이에요… (한공회는 10초 이상 걸릴 수 있어요)</div>';
   $("#searchBtn").disabled = $("#refresh").disabled = true;
-  const kw = $("#keyword").value.trim() || "공인회계사";
+  const kw = $("#keyword").value.trim() || DEFAULT_KW;
   store.set("keyword", kw);
   try {
     const data = await api(`/api/jobs?keyword=${encodeURIComponent(kw)}&refresh=${refresh}`);
@@ -404,7 +431,7 @@ function visibleJobs() {
     const d = dday(j);
     if (blocked(j)) return false;
     if (state.source !== "all" && j.source !== state.source) return false;
-    if (state.part && !j.part_time) return false;
+    if (state.kinds.size && ![...state.kinds].some((k) => KIND_TEST[k](j))) return false;
     if (state.soon && !(d !== null && d >= 0 && d <= 7)) return false;
     if (state.onlyNew && !isNew(j)) return false;
     if (state.starOnly && !state.marks[j.id]) return false;
@@ -466,7 +493,8 @@ function render() {
   $("#fCareer").value = state.career;
   $("#sort").value = state.sort;
 
-  for (const [id, on] of [["#fPart", state.part], ["#fSoon", state.soon], ["#fNew", state.onlyNew], ["#fStar", state.starOnly], ["#fClosed", state.hideClosed]])
+  document.querySelectorAll("[data-kind]").forEach((b) => b.setAttribute("aria-pressed", state.kinds.has(b.dataset.kind)));
+  for (const [id, on] of [["#fSoon", state.soon], ["#fNew", state.onlyNew], ["#fStar", state.starOnly], ["#fClosed", state.hideClosed]])
     $(id).setAttribute("aria-pressed", on);
 
   const hiddenByCo = state.jobs.filter((j) => blocked(j) === "company").length;
@@ -502,6 +530,7 @@ function rowHtml(j, opts = {}) {
     j.location && `<span>${esc(j.location)}</span>`,
     j.career && `<span>${esc(j.career)}</span>`,
     j.job_type && `<span>${esc(j.job_type)}</span>`,
+    j.pay && `<span>${esc(j.pay)}</span>`,
     j.deadline_date && `<span>마감 ${fmtDate(j.deadline_date)}</span>`,
     j.posted_date && `<span>등록 ${fmtDate(j.posted_date)}</span>`,
     opts.gone && `<span>마지막 확인 ${fmtDate(j.last_seen)}</span>`,
@@ -511,7 +540,7 @@ function rowHtml(j, opts = {}) {
     ${ddayHtml(j)}
     <div class="main">
       <a href="${esc(j.url)}" target="_blank" rel="noopener noreferrer">${esc(j.title)}</a>
-      ${j.part_time ? '<span class="tag pt">파트타임</span>' : ""}${!opts.board && isNew(j) ? '<span class="tag nw">NEW</span>' : ""}${m && m.status && !opts.board ? `<span class="tag st">${esc(m.status)}</span>` : ""}${opts.gone ? '<span class="tag gone">목록에서 내려감</span>' : ""}
+      ${j.intern ? '<span class="tag in">인턴</span>' : ""}${isShort(j) ? '<span class="tag sh">알바·단기</span>' : ""}${j.part_time ? '<span class="tag pt">파트타임</span>' : ""}${!opts.board && isNew(j) ? '<span class="tag nw">NEW</span>' : ""}${m && m.status && !opts.board ? `<span class="tag st">${esc(m.status)}</span>` : ""}${opts.gone ? '<span class="tag gone">목록에서 내려감</span>' : ""}
       <p class="meta">${metas}</p>
       ${m && m.memo && !open ? `<p class="memo-line">${esc(m.memo)}</p>` : ""}
     </div>
@@ -569,10 +598,10 @@ function renderBoard() {
 
 /* ───── CSV (보이는 목록) ───── */
 function exportCsv() {
-  const rows = [["출처", "회사", "제목", "마감일", "등록일", "지역", "경력", "고용형태", "파트타임", "내 상태", "메모", "링크"]];
+  const rows = [["출처", "회사", "제목", "마감일", "등록일", "지역", "경력", "고용형태", "급여", "인턴", "알바·단기", "파트타임", "내 상태", "메모", "링크"]];
   for (const j of visibleJobs()) {
     const m = state.marks[j.id] || {};
-    rows.push([LABEL[j.source], j.company, j.title, j.deadline_date || j.deadline_text, j.posted_date || "", j.location, j.career, j.job_type, j.part_time ? "O" : "", m.status || "", m.memo || "", j.url]);
+    rows.push([LABEL[j.source], j.company, j.title, j.deadline_date || j.deadline_text, j.posted_date || "", j.location, j.career, j.job_type, j.pay || "", j.intern ? "O" : "", isShort(j) ? "O" : "", j.part_time ? "O" : "", m.status || "", m.memo || "", j.url]);
   }
   const csv = "﻿" + rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const a = document.createElement("a");
@@ -582,7 +611,7 @@ function exportCsv() {
 }
 
 /* ───── 이벤트 ───── */
-$("#presets").innerHTML = '빠른 검색: ' + PRESETS.map((p) => `<button type="button" data-kw="${esc(p)}">${esc(p.includes(",") ? "전부 합쳐서" : p)}</button>`).join("");
+$("#presets").innerHTML = '빠른 검색: ' + PRESETS.map(([label, kw]) => `<button type="button" data-kw="${esc(kw)}" title="${esc(kw)}">${esc(label)}</button>`).join("");
 $("#presets").addEventListener("click", (e) => {
   const b = e.target.closest("[data-kw]"); if (!b) return;
   $("#keyword").value = b.dataset.kw; load(false);
@@ -595,7 +624,10 @@ $("#sort").addEventListener("change", (e) => { state.sort = e.target.value; rend
 $("#fRegion").addEventListener("change", (e) => { state.region = e.target.value; render(); });
 $("#fCareer").addEventListener("change", (e) => { state.career = e.target.value; render(); });
 $("#q").addEventListener("input", (e) => { state.q = e.target.value.trim(); render(); });
-for (const [id, k] of [["#fPart", "part"], ["#fSoon", "soon"], ["#fNew", "onlyNew"], ["#fStar", "starOnly"], ["#fClosed", "hideClosed"]])
+document.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => {
+  const k = b.dataset.kind; state.kinds.has(k) ? state.kinds.delete(k) : state.kinds.add(k); render();
+}));
+for (const [id, k] of [["#fSoon", "soon"], ["#fNew", "onlyNew"], ["#fStar", "starOnly"], ["#fClosed", "hideClosed"]])
   $(id).addEventListener("click", () => { state[k] = !state[k]; render(); });
 $("#chips").addEventListener("click", (e) => {
   const b = e.target.closest("[data-src]"); if (!b) return;
